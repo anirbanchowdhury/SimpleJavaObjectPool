@@ -15,9 +15,7 @@ import java.util.concurrent.TimeUnit;
  *
  * -XX:+UnlockCommercialFeatures - add if prior to JDK11
  * -XX:+FlightRecorder -XX:StartFlightRecording=duration=120s,filename=nopool-small.jfr -Xms512M -Xmx1024M -XX:+UseG1GC
- * false true nopool-small 0
- *
- * */
+ **/
 
 @Slf4j
 public class Entry {
@@ -51,12 +49,10 @@ public class Entry {
             //TODO : PARAMETERIZE if needed, this is the test run length in MINUTES
             final int RUNTIME_LENGTH_MINUTES = 1;
             long endTime = currentTime + TimeUnit.MINUTES.toNanos(RUNTIME_LENGTH_MINUTES);
-
-            long startMilis = System.currentTimeMillis();
             long changeTime = 0;
 
             /*
-                Basic test is take from pool, cleanup,  return to pool
+              Basic test is take from pool, cleanup,  return to pool
             * */
             while(currentTime < endTime){
                 obj = (Poolable) pool.takeFromPool();
@@ -65,7 +61,7 @@ public class Entry {
                     log.info("Pool size = {}",pool.size());
                     throw new NullPointerException("Bad pool object");
                 }
-                /* Actual Matching logic / publish obj to other ports */
+                /* Actual Matching logic / publish obj to other ports should be here */
                 obj.cleanup();
                 pool.returnToPool(obj);
                 histogram.recordValue(System.nanoTime() - currentTime);
