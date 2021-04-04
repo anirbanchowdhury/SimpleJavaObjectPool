@@ -26,12 +26,12 @@ public class Entry {
     private String csvFilename;
     private Histogram histogram;
 
-    public Entry(String fname,boolean usePool, boolean typeOfObject , int initialSize){
-        log.error("fname = {}. usePool = {}, typeOfObject = {}, initialSize = {}", fname,usePool,typeOfObject,initialSize);
+    public Entry(String fname,boolean usePool, boolean isSmallObject , int initialSize){
+        log.error("fname = {}. usePool = {}, isSmallObject = {}, initialSize = {}", fname,usePool,isSmallObject,initialSize);
         csvFilename = new StringBuilder(fname).append(".csv").toString();
         histogram = new Histogram(36000000L,3);
         try{
-            pool = typeOfObject ? new BasicPool (SmallObject.class,usePool,initialSize) : new BasicPool (LargeObject.class,usePool,initialSize);
+            pool = isSmallObject ? new BasicPool (SmallObject.class,usePool,initialSize) : new BasicPool (LargeObject.class,usePool,initialSize);
             if(!pool.initializePool()){
                 throw new RuntimeException("Couldn't instantiate pool ");
             }
@@ -44,7 +44,7 @@ public class Entry {
         try(BufferedWriter bufferedWriter = Files.newBufferedWriter(Paths.get(csvFilename), StandardOpenOption.CREATE)){
             long countOfObjects = 0;
             Poolable obj ;
-            bufferedWriter.write("Count, min, max, 50,90,99,99.99"); // csv header
+            bufferedWriter.write("Count, min, max, 50th percentile,90th percentile,99th percentile,99.99th percentile"); // csv header
             bufferedWriter.newLine();
 
             long currentTime = System.nanoTime();
@@ -128,10 +128,10 @@ public class Entry {
             initialSize = Integer.parseInt(args[3]);
         }*/
         log.info("Running on {} cores on {} OS on {} JDK ",Runtime.getRuntime().availableProcessors(),System.getProperty("os.name"),System.getProperty("java.version"));
-        /* Note do not run below lines at the same time one after another. It's NOT a good benchmark as the JVM is not restarting in between */
-        new Entry("nopool-small",false,true,0).start();
-        // new Entry("pool-small",true,true,100).start();
+        /* WARNING : Do NOT run below lines at the same time one after another. It's NOT a good benchmark as the JVM is not restarting in between */
+        //new Entry("nopool-small",false,true,0).start();
+        //new Entry("pool-small",true,true,100).start();
         //new Entry("nopool-large",false,false,0).start();
-        //new Entry("pool-large",true,false,100).start();
+        new Entry("pool-large",true,false,100).start();
     }
 }
