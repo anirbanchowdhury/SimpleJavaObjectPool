@@ -18,4 +18,11 @@ public class LargeObject implements Poolable {
     public LargeObject(){
         buffer = ByteBuffer.allocate(1024);
     }
+
+    @Override
+    public void cleanup() {
+        buffer = null;
+        // Basically set others to null, just too much typing
+
+    }
 }

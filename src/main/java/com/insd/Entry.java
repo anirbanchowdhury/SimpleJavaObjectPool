@@ -12,58 +12,52 @@ import java.util.concurrent.TimeUnit;
 
 
 /*
-* -XX:+FlightRecorder -XX:StartFlightRecording=duration=120s,filename=nopool-small.jfr -Xms512M -Xmx1024M -XX:+UseG1GC
-* false true nopool-small 0
-*
-*
-* -XX:+FlightRecorder -XX:StartFlightRecording=duration=120s,filename=pool-small.jfr -Xms512M -Xmx1024M -XX:+UseG1GC
-* true true pool-small 100
-*
-*
-* -XX:+FlightRecorder -XX:StartFlightRecording=duration=120s,filename=nopool-large.jfr -Xms512M -Xmx1024M -XX:+UseG1GC
-* false false nopool-large 100
-*
-* */
+ *
+ * -XX:+UnlockCommercialFeatures - add if prior to JDK11
+ * -XX:+FlightRecorder -XX:StartFlightRecording=duration=120s,filename=nopool-small.jfr -Xms512M -Xmx1024M -XX:+UseG1GC
+ * false true nopool-small 0
+ *
+ * */
 
 @Slf4j
 public class Entry {
 
+    private Pool pool;
     private String csvFilename;
     private Histogram histogram;
 
-    BasicPool pool;
-
     public Entry(String fname,boolean usePool, boolean typeOfObject , int initialSize){
         log.error("fname = {}. usePool = {}, typeOfObject = {}, initialSize = {}", fname,usePool,typeOfObject,initialSize);
-        csvFilename = fname+".csv";
+        csvFilename = new StringBuilder(fname).append(".csv").toString();
         histogram = new Histogram(36000000L,3);
         try{
-        pool = typeOfObject ? new BasicPool (SmallObject.class,usePool,initialSize) : new BasicPool (LargeObject.class,usePool,initialSize);
-        if(!pool.initializePool()){
-            throw new RuntimeException("Bad pool init");
-        }
+            pool = typeOfObject ? new BasicPool (SmallObject.class,usePool,initialSize) : new BasicPool (LargeObject.class,usePool,initialSize);
+            if(!pool.initializePool()){
+                throw new RuntimeException("Couldn't instantiate pool ");
+            }
         } catch (InstantiationException e) {
-            log.error("Error,{}",e.toString());
+            log.error("Couldn't instantiate pool , error = {}",e.toString());
         }
     }
-    public void start(){
 
-        try(BufferedWriter bufferedWriter = Files.newBufferedWriter(Paths.get(csvFilename), StandardOpenOption.CREATE);
-        ){
+    public void start(){
+        try(BufferedWriter bufferedWriter = Files.newBufferedWriter(Paths.get(csvFilename), StandardOpenOption.CREATE)){
             long countOfObjects = 0;
-            Poolable obj = null;
-            bufferedWriter.write("Count, min, max, 50,90,99,99.99");
+            Poolable obj ;
+            bufferedWriter.write("Count, min, max, 50,90,99,99.99"); // csv header
             bufferedWriter.newLine();
 
-            //TODO : PARAMETERIZE
-            final int RUNTIME_LENGTH = 1;
-
             long currentTime = System.nanoTime();
-            long endTime = currentTime + TimeUnit.MINUTES.toNanos(RUNTIME_LENGTH);
+            //TODO : PARAMETERIZE if needed, this is the test run length in MINUTES
+            final int RUNTIME_LENGTH_MINUTES = 1;
+            long endTime = currentTime + TimeUnit.MINUTES.toNanos(RUNTIME_LENGTH_MINUTES);
 
             long startMilis = System.currentTimeMillis();
             long changeTime = 0;
 
+            /*
+                Basic test is take from pool, cleanup,  return to pool
+            * */
             while(currentTime < endTime){
                 obj = (Poolable) pool.takeFromPool();
 
@@ -71,30 +65,23 @@ public class Entry {
                     log.info("Pool size = {}",pool.size());
                     throw new NullPointerException("Bad pool object");
                 }
+                /* Actual Matching logic / publish obj to other ports */
+                obj.cleanup();
                 pool.returnToPool(obj);
                 histogram.recordValue(System.nanoTime() - currentTime);
                 countOfObjects += 1;
                 changeTime = checkAndWriteStats(bufferedWriter,currentTime,changeTime);
-                currentTime = System.nanoTime(); // reset again
-
+                currentTime = System.nanoTime(); // reset again for the histogram to be accurate
             }
-            logFinishingMessage(countOfObjects, startMilis);
+            log.info("Throughput = {} over {} minute ", countOfObjects/RUNTIME_LENGTH_MINUTES, RUNTIME_LENGTH_MINUTES);
             bufferedWriter.flush();
-
         }catch (Exception e){
             e.printStackTrace();
         }
     }
 
-    private final void logFinishingMessage(long counter, long startMilis){
-        long endMilis = System.currentTimeMillis();
-        long timeInMinutes = TimeUnit.MILLISECONDS.toMinutes(endMilis -startMilis);
-        log.warn("Throughput = {} over {} minute ", counter/timeInMinutes, timeInMinutes);
-
-    }
-
     private final long checkAndWriteStats(BufferedWriter writer, long currentTime, long changeTime) throws IOException {
-        if(changeTime != currentTime/1_000_000_000){
+        if(changeTime != currentTime/1_000_000_000){ //write every 1s
             changeTime = System.nanoTime()/1_000_000_000 ;
             log.info(getStats(histogram));
             writer.write(getStatsAsCSV(histogram));
@@ -106,10 +93,9 @@ public class Entry {
 
 
     public final String getStats(Histogram histogram){
-        StringBuilder builder = new StringBuilder("[")
-                .append("]count=").append(histogram.getTotalCount())
-                .append(";Min=").append(histogram.getTotalCount())
-                .append(";Max=").append(histogram.getTotalCount())
+        StringBuilder builder = new StringBuilder("count=").append(histogram.getTotalCount())
+                .append(";Min=").append(histogram.getMinValue())
+                .append(";Max=").append(histogram.getMaxValue())
                 .append(";50th percentile =").append(histogram.getValueAtPercentile(50))
                 .append(";90th percentile =").append(histogram.getValueAtPercentile(90))
                 .append(";99th percentile =").append(histogram.getValueAtPercentile(99))
@@ -118,11 +104,10 @@ public class Entry {
     }
 
     public final String getStatsAsCSV( Histogram histogram){
-        StringBuilder builder = new StringBuilder("[")
-
-                .append("]").append(histogram.getTotalCount())
-                .append(",").append(histogram.getTotalCount())
-                .append(",").append(histogram.getTotalCount())
+        StringBuilder builder = new StringBuilder("")
+                .append(histogram.getTotalCount())
+                .append(",").append(histogram.getMinValue())
+                .append(",").append(histogram.getMaxValue())
                 .append(",").append(histogram.getValueAtPercentile(50))
                 .append(",").append(histogram.getValueAtPercentile(90))
                 .append(",").append(histogram.getValueAtPercentile(99))
@@ -131,7 +116,7 @@ public class Entry {
     }
 
     public static void main(String[] args) {
-       /* //TODO : can parameterize
+       /* TODO : can parameterize if reqd.
         boolean usePool = false;
         boolean smallObjects = true;
         String csvFileName = null;
@@ -142,11 +127,11 @@ public class Entry {
             csvFileName = args[2];
             initialSize = Integer.parseInt(args[3]);
         }*/
-        log.info("Running on {} cores on {}",Runtime.getRuntime().availableProcessors(),System.getProperty("os.name"));
-        /* Note below is NOT a good benchmark as the JVM is not restarting */
+        log.info("Running on {} cores on {} OS on {} JDK ",Runtime.getRuntime().availableProcessors(),System.getProperty("os.name"),System.getProperty("java.version"));
+        /* Note do not run below lines at the same time one after another. It's NOT a good benchmark as the JVM is not restarting in between */
         new Entry("nopool-small",false,true,0).start();
-        new Entry("pool-small",true,true,100).start();
-        new Entry("nopool-large",false,false,0).start();
-        new Entry("pool-large",true,false,100).start();
+        // new Entry("pool-small",true,true,100).start();
+        //new Entry("nopool-large",false,false,0).start();
+        //new Entry("pool-large",true,false,100).start();
     }
 }
