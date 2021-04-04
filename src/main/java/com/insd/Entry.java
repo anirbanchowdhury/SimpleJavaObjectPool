@@ -126,8 +126,8 @@ public class Entry {
         log.info("Running on {} cores on {} OS on {} JDK ",Runtime.getRuntime().availableProcessors(),System.getProperty("os.name"),System.getProperty("java.version"));
         /* WARNING : Do NOT run below lines at the same time one after another. It's NOT a good benchmark as the JVM is not restarting in between */
         //new Entry("nopool-small",false,true,0).start();
-        //new Entry("pool-small",true,true,100).start();
+        new Entry("pool-small",true,true,100).start();
         //new Entry("nopool-large",false,false,0).start();
-        new Entry("pool-large",true,false,100).start();
+        //new Entry("pool-large",true,false,100).start();
     }
 }
