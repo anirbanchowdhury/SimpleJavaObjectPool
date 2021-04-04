@@ -64,7 +64,7 @@ public class BasicPool<Poolable> implements Pool<Poolable> {
 
     public void returnToPool(Poolable t) {
         if(usePool){
-            //TODO : clean first
+            //TODO : cleaning in Entry.java, can also clean here
             pool.addLast(t);
         }
     }
